@@ -1,19 +1,38 @@
-'use client'
-import {
-  QueryClient,
-  QueryClientProvider,
-} from '@tanstack/react-query'
+'use client';
 
+import React, { useState } from 'react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
-// query provider 
-
-const ReactQueryProvider = ({children}:{children:React.ReactNode}) => {
-  const queryClient = new QueryClient()
-  return (
-     <QueryClientProvider client={queryClient}>
-      {children}
-    </QueryClientProvider>
-  )
+function makeQueryClient() {
+  return new QueryClient({
+    defaultOptions: {
+      queries: {
+        // Don't retry on 4xx errors – they are expected/handled
+        retry: (failureCount, error) => {
+          const status = (error as { response?: { status?: number } })?.response?.status;
+          if (status && status >= 400 && status < 500) return false;
+          return failureCount < 2;
+        },
+        staleTime: 1000 * 60 * 3, // 3 minutes default
+        refetchOnWindowFocus: false,
+        gcTime: 1000 * 60 * 10, // 10 minutes
+      },
+      mutations: {
+        retry: false,
+      },
+    },
+  });
 }
 
-export default ReactQueryProvider
+const ReactQueryProvider = ({ children }: { children: React.ReactNode }) => {
+  // useState ensures a single QueryClient instance per component lifecycle
+  const [queryClient] = useState(() => makeQueryClient());
+
+  return (
+    <QueryClientProvider client={queryClient}>
+      {children}
+    </QueryClientProvider>
+  );
+};
+
+export default ReactQueryProvider;
