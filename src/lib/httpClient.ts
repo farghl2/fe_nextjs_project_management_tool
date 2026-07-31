@@ -1,46 +1,98 @@
 import axiosInstance from './axiosInstance';
 
-// Generic API methods
+// ─── Backend response envelope ────────────────────────────────────────────────
+// The backend wraps responses in:
+// { success: boolean, message: string, data: T, timestamp: string, path: string, total?: number, meta?: ... }
+// We unwrap data while preserving pagination metadata (meta, total, totalPages, page, limit)
+// so list endpoints retain their pagination information.
+
+interface BackendEnvelope<T> {
+  success: boolean;
+  message?: string;
+  data: T;
+  meta?: unknown;
+  total?: number;
+  totalPages?: number;
+  page?: number;
+  limit?: number;
+  timestamp?: string;
+  path?: string;
+}
+
+function unwrap<T>(body: unknown): T {
+  if (
+    body !== null &&
+    typeof body === 'object' &&
+    'success' in (body as object) &&
+    'data' in (body as object)
+  ) {
+    const env = body as BackendEnvelope<T> & Record<string, unknown>;
+
+    // If data is an array AND the envelope carries pagination metadata (meta, total, totalPages, etc.),
+    // return an object that combines data with the metadata so list normalisers can read total/totalPages.
+    if (Array.isArray(env.data)) {
+      const hasMeta = env.meta || env.total !== undefined || env.totalPages !== undefined || env.totalCount !== undefined;
+      if (hasMeta) {
+        return {
+          data: env.data,
+          meta: env.meta ?? {
+            total: env.total ?? env.totalCount ?? env.count,
+            totalPages: env.totalPages,
+            page: env.page,
+            limit: env.limit,
+          },
+          total: env.total ?? env.totalCount ?? env.count,
+          totalPages: env.totalPages,
+          page: env.page,
+          limit: env.limit,
+        } as unknown as T;
+      }
+    }
+
+    return env.data;
+  }
+  // Otherwise return as-is (handles plain array or direct-object responses)
+  return body as T;
+}
+
+// ─── Generic API methods ──────────────────────────────────────────────────────
+
 export const api = {
-  // GET request
-  get: async <T>(url: string, params?: any): Promise<T> => {
+  get: async <T>(url: string, params?: Record<string, unknown>): Promise<T> => {
     const response = await axiosInstance.get(url, { params });
-    return response.data;
+    return unwrap<T>(response.data);
   },
 
-  // POST request
-  post: async <T>(url: string, data?: any): Promise<T> => {
+  post: async <T>(url: string, data?: unknown): Promise<T> => {
     const response = await axiosInstance.post(url, data);
-    return response.data;
+    return unwrap<T>(response.data);
   },
 
-  // PUT request
-  put: async <T>(url: string, data?: any): Promise<T> => {
+  put: async <T>(url: string, data?: unknown): Promise<T> => {
     const response = await axiosInstance.put(url, data);
-    return response.data;
+    return unwrap<T>(response.data);
   },
 
-  // PATCH request
-  patch: async <T>(url: string, data?: any): Promise<T> => {
+  patch: async <T>(url: string, data?: unknown): Promise<T> => {
     const response = await axiosInstance.patch(url, data);
-    return response.data;
+    return unwrap<T>(response.data);
   },
 
-  // DELETE request
   delete: async <T>(url: string): Promise<T> => {
     const response = await axiosInstance.delete(url);
-    return response.data;
+    return unwrap<T>(response.data);
   },
 
-  // File upload
-  upload: async <T>(url: string, file: File, onProgress?: (progress: number) => void): Promise<T> => {
+  upload: async <T>(
+    url: string,
+    file: File,
+    onProgress?: (progress: number) => void
+  ): Promise<T> => {
     const formData = new FormData();
     formData.append('file', file);
 
     const response = await axiosInstance.post(url, formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
+      headers: { 'Content-Type': 'multipart/form-data' },
       onUploadProgress: (progressEvent) => {
         if (onProgress && progressEvent.total) {
           const progress = Math.round((progressEvent.loaded * 100) / progressEvent.total);
@@ -49,33 +101,7 @@ export const api = {
       },
     });
 
-    return response.data;
-  },
-};
-
-// Token management utilities
-export const tokenManager = {
-  setToken: (token: string) => {
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('token', token);
-    }
-  },
-
-  getToken: (): string | null => {
-    if (typeof window !== 'undefined') {
-      return localStorage.getItem('token');
-    }
-    return null;
-  },
-
-  removeToken: () => {
-    if (typeof window !== 'undefined') {
-      localStorage.removeItem('token');
-    }
-  },
-
-  isAuthenticated: (): boolean => {
-    return !!tokenManager.getToken();
+    return unwrap<T>(response.data);
   },
 };
 

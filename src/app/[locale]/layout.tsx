@@ -1,23 +1,13 @@
 import { NextIntlClientProvider } from 'next-intl';
 import { getMessages } from 'next-intl/server';
-import { NuqsAdapter } from 'nuqs/adapters/next/app'
-import { Geist, Geist_Mono } from "next/font/google";
-
+import { NuqsAdapter } from 'nuqs/adapters/next/app';
 
 import "../globals.css";
 import ReactQueryProvider from '../../lib/providers/ReactQueryProvider';
 import { Directions, Languages } from '@/src/shared/constans/enums';
-
-
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
+import { AuthProvider } from '@/src/shared/providers/auth-context';
+import { ThemeProvider } from '@/src/shared/providers/theme-provider';
+import { Toaster } from '@/src/shared/components/ui/sonner';
 
 export default async function LocaleLayout({
   children,
@@ -29,17 +19,26 @@ export default async function LocaleLayout({
   const { locale } = await params;
   const messages = await getMessages();
 
+  const isRtl = locale === Languages.ARABIC;
+
   return (
-    <html lang={locale} dir={locale === Languages.ARABIC ? Directions.RTL : Directions.LTR}>
-      <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
+    <div
+      lang={locale}
+      dir={isRtl ? Directions.RTL : Directions.LTR}
+      className="font-sans antialiased min-h-screen bg-background text-foreground"
+    >
+      <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
         <NextIntlClientProvider messages={messages}>
           <ReactQueryProvider>
-            <NuqsAdapter>
-              {children}
-            </NuqsAdapter>
+            <AuthProvider>
+              <NuqsAdapter>
+                {children}
+                <Toaster richColors position="top-right" closeButton />
+              </NuqsAdapter>
+            </AuthProvider>
           </ReactQueryProvider>
         </NextIntlClientProvider>
-      </body>
-    </html>
+      </ThemeProvider>
+    </div>
   );
 }
